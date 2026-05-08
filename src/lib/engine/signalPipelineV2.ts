@@ -48,6 +48,8 @@ const SignalNarrativeSchema = z.object({
   title:               z.string().max(100),
   catalystSummary:     z.string(),
   invalidationCriteria: z.string(),
+  tradingVehicle:      z.string(),   // e.g. 'BTCUSDT.P (Futures) 5x' or 'Spot'
+  fundingRateWarning:  z.string().optional(), // funding rate caution for perp longs
   direction:           z.enum(['LONG', 'SHORT', 'WATCH']),
   riskRating:          z.enum(['LOW', 'MEDIUM', 'HIGH']),
   timeHorizon:         z.enum(['1H', '4H', '1D', '1W']),
@@ -77,11 +79,22 @@ catalystSummary REQUIREMENTS (must include ALL of these):
 NEVER write: "A whale bought X of the coin." That is not analysis.
 ALWAYS write: specific price levels, specific percentages, specific conditions.
 
+tradingVehicle RULES (MANDATORY — always output this field):
+  - High volatility (1h change > 8%) + LONG → use Futures with CONSERVATIVE leverage: e.g. "BTCUSDT.P (Futures) 3x"
+  - Low volatility accumulation signal → use "Spot" position
+  - Conviction >= 80 + large cap (BTC/ETH) → can suggest up to "5x leverage"
+  - NEVER suggest leverage > 5x. NEVER suggest futures for assets with liquidity < $1M.
+
+fundingRateWarning (MANDATORY for any Futures LONG signal):
+  - Always add: "⚠️ Check Funding Rate before entry. If Funding Rate > 0.03%, longs are crowded — reduce leverage or avoid. High funding = Long Squeeze risk."
+  - For SHORT signals: "⚠️ Verify Open Interest trend. Shorts in downtrend may face squeeze if OI declines rapidly."
+  - For SPOT: omit this field or set to null.
+
 invalidationCriteria: Name EXACT price levels or conditions that kill the thesis.
 direction: LONG=strong bullish entry thesis. SHORT=strong bearish thesis. WATCH=insufficient evidence.
 riskRating: LOW=deep liquidity + institutional wallet + confirmed trend. HIGH=thin market or contradictory signals.
 timeHorizon: 1H=momentum scalp. 4H=swing setup. 1D=trend continuation. 1W=accumulation.
-confidenceScore: 0-100. Requires: whale size ≥$500K for 70+. Requires: confirmed trend for 80+.
+confidenceScore: 0-100. Requires: whale size >=\$500K for 70+. Requires: confirmed trend for 80+.
 Return ONLY valid JSON. No markdown. No extra text.`;
 
 // ─── Rule-based narrative (fires when no OpenAI key or low conviction) ─────────
@@ -157,10 +170,35 @@ function buildRuleNarrative(
   if (liq > 1_000_000) keyTags.push('deep-liquidity');
   if (riskRating === 'HIGH') keyTags.push('high-risk');
 
+  // Trading vehicle: infer from asset type, volatility, and conviction
+  const isLargeCap = ['BTC', 'ETH', 'SOL', 'BNB', 'TON', 'TRX', 'LINK', 'ARB', 'OP'].includes(sym.toUpperCase());
+  const isHighVol = Math.abs(p1h) > 8;
+  const maxLeverage = (convictionScore >= 80 && isLargeCap) ? 5 : (convictionScore >= 65 && liq > 1_000_000) ? 3 : 0;
+  let tradingVehicle: string;
+  let fundingRateWarning: string | undefined;
+  if (direction === 'WATCH' || liq < 1_000_000 || maxLeverage === 0) {
+    tradingVehicle = `${sym} — Spot (liquidity/conviction too low for leverage)`;
+    fundingRateWarning = undefined;
+  } else if (isHighVol && direction === 'LONG') {
+    tradingVehicle = `${sym}USDT.P (Futures) ${maxLeverage}x — momentum entry`;
+    fundingRateWarning = `⚠️ Check Funding Rate before entry. If Funding Rate > 0.03%, longs are crowded — reduce to ${Math.max(1, maxLeverage - 2)}x or await reset. High funding = Long Squeeze risk.`;
+  } else if (direction === 'LONG') {
+    tradingVehicle = convictionScore >= 75 ? `${sym}USDT.P (Futures) ${maxLeverage}x` : `${sym} — Spot (accumulation phase)`;
+    fundingRateWarning = convictionScore >= 75 ? `⚠️ Check Funding Rate before entry. If Funding Rate > 0.03%, longs are crowded — reduce leverage or avoid. High funding = Long Squeeze risk.` : undefined;
+  } else if (direction === 'SHORT') {
+    tradingVehicle = `${sym}USDT.P (Futures) ${maxLeverage}x SHORT`;
+    fundingRateWarning = `⚠️ Verify Open Interest trend. If OI is declining rapidly, avoid shorting — squeeze risk elevated.`;
+  } else {
+    tradingVehicle = `${sym} — Spot (monitoring)`;
+    fundingRateWarning = undefined;
+  }
+
   return {
     title: `${walletArchetype}: ${sym} ${direction === 'LONG' ? 'accumulation' : direction === 'SHORT' ? 'distribution' : 'activity'} on ${chain}`,
     catalystSummary,
     invalidationCriteria,
+    tradingVehicle,
+    fundingRateWarning,
     direction,
     riskRating,
     timeHorizon,
@@ -216,12 +254,14 @@ Return JSON schema:
   "title": "string (max 100 chars)",
   "catalystSummary": "string (2-3 sentences with specific data points)",
   "invalidationCriteria": "string (specific price/volume/time thresholds)",
+  "tradingVehicle": "string (e.g. 'BTCUSDT.P (Futures) 5x' or 'BTC — Spot (accumulation phase)')",
+  "fundingRateWarning": "string or null (mandatory for Futures LONG/SHORT, null for Spot)",
   "direction": "LONG | SHORT | WATCH",
   "riskRating": "LOW | MEDIUM | HIGH",
   "timeHorizon": "1H | 4H | 1D | 1W",
   "keyTags": ["string"] (max 5),
   "confidenceScore": number (0-100)
-}`;
+}\n\nCRITICAL: tradingVehicle and fundingRateWarning are REQUIRED fields. Do not omit them.`;
 
   const { content } = await chat(
     [
@@ -441,6 +481,8 @@ export async function runSignalPipeline(chain: Chain): Promise<PipelineResult> {
           title:                narrative.title,
           catalystSummary:      narrative.catalystSummary,
           invalidationCriteria: narrative.invalidationCriteria,
+          tradingVehicle:       (narrative as any).tradingVehicle ?? `${(s as any).tokenSymbol} — Spot`,
+          fundingRateWarning:   (narrative as any).fundingRateWarning ?? undefined,
           riskRating:           narrative.riskRating,
           timeHorizon:          narrative.timeHorizon,
           keyTags:              narrative.keyTags,

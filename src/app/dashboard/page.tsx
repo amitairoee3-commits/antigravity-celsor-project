@@ -273,7 +273,24 @@ function SignalCard({ signal, index }: { signal: CachedSignal; index: number }) 
                   </div>
                 </div>
               </div>
+
+              {/* Trading Vehicle + Funding Rate Warning */}
+              {(signal as any).tradingVehicle && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/15 rounded-lg px-4 py-2.5">
+                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest shrink-0">Trade Via</span>
+                    <span className="text-sm font-bold text-white font-mono">{(signal as any).tradingVehicle}</span>
+                  </div>
+                  {(signal as any).fundingRateWarning && (
+                    <div className="flex items-start gap-2 bg-yellow-500/5 border border-yellow-500/15 rounded-lg px-4 py-2.5">
+                      <span className="text-yellow-400 text-sm shrink-0 mt-0.5">⚠️</span>
+                      <p className="text-xs text-yellow-300/80 leading-relaxed">{(signal as any).fundingRateWarning}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+
           </motion.div>
         )}
       </AnimatePresence>
