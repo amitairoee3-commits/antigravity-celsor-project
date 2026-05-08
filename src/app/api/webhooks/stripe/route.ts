@@ -4,11 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 
 // We need the service role key to bypass RLS in webhooks
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://mock.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'mock-key'
 );
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET ?? 'mock_secret';
 
 export async function POST(req: NextRequest) {
   const body = await req.text();

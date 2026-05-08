@@ -27,6 +27,7 @@ import { batchGetPairData, type DexPairData } from '@/lib/data/dexscreener';
 import { getMacroSnapshot } from '@/lib/engine/macroController';
 import { openPosition, tickPositions } from '@/lib/engine/pnlTracker';
 import { getReputationBoost, getWalletReputationContext, incrementWalletSignalCount } from '@/lib/engine/walletReputation';
+import { notifyEliteSignal } from '@/lib/notifications/webhookService';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -455,6 +456,19 @@ export async function runSignalPipeline(chain: Chain): Promise<PipelineResult> {
         console.log(`[CELSOR] ✓ ${signal.direction} ${signal.tokenSymbol} (${chain}) `
           + `score=${signal.convictionScore} risk=${signal.riskRating} horizon=${signal.timeHorizon}`
           + (dexData ? ` price=${dexData.price.toFixed(6)}` : ''));
+
+        // Notify if conviction > 85 (Institutional Tier)
+        if (signal.convictionScore > 85) {
+          notifyEliteSignal({
+            type: 'INSTITUTIONAL',
+            title: `🐋 INSTITUTIONAL TIER: ${signal.direction} on ${signal.tokenSymbol}`,
+            symbol: signal.tokenSymbol,
+            chain: signal.chain,
+            convictionScore: signal.convictionScore,
+            narrative: signal.catalystSummary,
+            address: (s as any).address,
+          }).catch(e => console.warn('[CELSOR Webhook] Failed:', e));
+        }
 
         // Open PnL position for every directional signal (async — fire and forget)
         if (signal.direction !== 'WATCH') {

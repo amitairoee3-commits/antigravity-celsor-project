@@ -7,6 +7,7 @@ import { Shield, Bell, Search, Activity } from 'lucide-react';
 import Link from 'next/link';
 
 import CoinSearchBar from '@/components/CoinSearchBar';
+import LiveEngineLog from '@/components/LiveEngineLog';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -54,10 +55,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-white/10">
-          <PageTransition>
-            {children}
-          </PageTransition>
+        <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-white/10 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <PageTransition>
+              {children}
+            </PageTransition>
+          </div>
+          <LiveEngineLog />
         </main>
       </div>
     </div>

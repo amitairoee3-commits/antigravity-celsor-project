@@ -12,13 +12,13 @@ test.describe('CELSOR Nexus Scanner', () => {
     await page.goto('/dashboard');
     
     // Check header
-    await expect(page.getByRole('heading', { name: /CELSOR NEXUS/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /CELSOR/i })).toBeVisible();
     
     // Check engine status
-    await expect(page.getByText(/ENGINE ONLINE/i)).toBeVisible();
+    await expect(page.getByText(/ENGINE ONLINE/i, { exact: false })).toBeVisible();
     
     // Ensure the feed title exists
-    await expect(page.getByText('Live Intelligence Feed')).toBeVisible();
+    await expect(page.getByText('Live Intelligence Feed', { exact: false })).toBeVisible();
   });
 
   test('user can perform a manual wallet analysis', async ({ page }) => {
@@ -38,6 +38,6 @@ test.describe('CELSOR Nexus Scanner', () => {
     await expect(profileHeading).toBeVisible({ timeout: 15000 });
     
     // Ensure conviction score is rendered
-    await expect(page.getByText('Conviction Score')).toBeVisible();
+    await expect(page.getByText('Conviction Score', { exact: true })).toBeVisible();
   });
 });

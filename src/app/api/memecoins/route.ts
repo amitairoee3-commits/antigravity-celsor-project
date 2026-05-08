@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTrendingMemecoins, fetchBoostedTokens, searchToken, getMockMemeSignals } from '@/lib/data/dexscreener';
+import { notifyEliteSignal } from '@/lib/notifications/webhookService';
 
 export const dynamic = 'force-dynamic';
 
