@@ -1,0 +1,224 @@
+// This is your Prisma schema file for CELSOR
+// Mirrors the Supabase SQL schema exactly — use `prisma db pull` to sync,
+// or apply the SQL migration first, then generate.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum PlanTier {
+  free
+  basic
+  pro
+
+  @@map("plan_tier")
+}
+
+enum SignalDirection {
+  LONG
+  SHORT
+  WATCH
+
+  @@map("signal_direction")
+}
+
+enum RiskRating {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("risk_rating")
+}
+
+enum ChainId {
+  eth
+  arb
+  base
+  bsc
+  op
+
+  @@map("chain_id")
+}
+
+// ─── Profile (extends Supabase auth.users) ────────────────────────────────────
+
+model Profile {
+  id              String    @id @db.Uuid
+  email           String
+  plan            PlanTier  @default(free)
+  preferences     Json      @default("{}")
+  signalsToday    Int       @default(0) @map("signals_today")
+  signalsResetAt  DateTime  @default(now()) @map("signals_reset_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  subscription    Subscription?
+  watchlist       UserWatchlist[]
+  alerts          UserAlert[]
+  bookmarks       SignalBookmark[]
+
+  @@map("profiles")
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @unique @map("user_id") @db.Uuid
+  stripeCustomerId    String?   @unique @map("stripe_customer_id")
+  stripeSubId         String?   @unique @map("stripe_sub_id")
+  plan                PlanTier  @default(free)
+  status              String    @default("active")
+  currentPeriodEnd    DateTime? @map("current_period_end")
+  cancelAtPeriodEnd   Boolean   @default(false) @map("cancel_at_period_end")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  profile             Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ─── Wallets ──────────────────────────────────────────────────────────────────
+
+model Wallet {
+  id              String    @id @default(uuid()) @db.Uuid
+  address         String
+  chain           ChainId
+  archetype       String    @default("Unknown")
+  convictionScore Int       @default(0) @map("conviction_score")
+  followWorthiness Int      @default(0) @map("follow_worthiness")
+  tags            String[]  @default([])
+  totalVolumeUsd  Decimal   @default(0) @map("total_volume_usd") @db.Decimal(20, 2)
+  txCount         Int       @default(0) @map("tx_count")
+  lastSeenTxHash  String?   @map("last_seen_tx_hash")
+  lastSeenAt      DateTime? @map("last_seen_at")
+  firstSeenAt     DateTime  @default(now()) @map("first_seen_at")
+
+  signals         Signal[]
+  watchlistItems  UserWatchlist[]
+
+  @@unique([address, chain])
+  @@index([convictionScore(sort: Desc)])
+  @@index([chain])
+  @@map("wallets")
+}
+
+// ─── Signals ──────────────────────────────────────────────────────────────────
+
+model Signal {
+  id                  String          @id
+  walletAddress       String          @map("wallet_address")
+  chain               ChainId
+  tokenSymbol         String          @map("token_symbol")
+  tokenName           String?         @map("token_name")
+  txHash              String          @map("tx_hash")
+  direction           SignalDirection  @default(WATCH)
+  convictionScore     Int             @default(0) @map("conviction_score")
+  title               String
+  catalystSummary     String          @map("catalyst_summary")
+  invalidationCriteria String         @default("") @map("invalidation_criteria")
+  riskRating          RiskRating      @default(MEDIUM) @map("risk_rating")
+  timeHorizon         String          @default("4H") @map("time_horizon")
+  keyTags             String[]        @default([]) @map("key_tags")
+  valueUsd            Decimal         @default(0) @map("value_usd") @db.Decimal(20, 2)
+  outcome             String?
+  outcomePnlPct       Decimal?        @map("outcome_pnl_pct") @db.Decimal(10, 4)
+  generatedAt         DateTime        @default(now()) @map("generated_at")
+  walletId            String?         @map("wallet_id") @db.Uuid
+
+  wallet              Wallet?         @relation(fields: [walletId], references: [id])
+  bookmarks           SignalBookmark[]
+
+  @@index([generatedAt(sort: Desc)])
+  @@index([convictionScore(sort: Desc)])
+  @@index([chain])
+  @@index([direction])
+  @@map("signals")
+}
+
+// ─── User Watchlist ───────────────────────────────────────────────────────────
+
+model UserWatchlist {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  walletId  String    @map("wallet_id") @db.Uuid
+  label     String?
+  notes     String?
+  addedAt   DateTime  @default(now()) @map("added_at")
+
+  user      Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet    Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, walletId])
+  @@index([userId])
+  @@map("user_watchlist")
+}
+
+// ─── User Alerts ──────────────────────────────────────────────────────────────
+
+model UserAlert {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  name            String
+  enabled         Boolean         @default(true)
+  chains          ChainId[]       @default([eth])
+  minConviction   Int             @default(75) @map("min_conviction")
+  directions      SignalDirection[] @default([LONG, SHORT])
+  tokens          String[]        @default([])
+  wallets         String[]        @default([])
+  emailEnabled    Boolean         @default(false) @map("email_enabled")
+  pushEnabled     Boolean         @default(false) @map("push_enabled")
+  triggeredCount  Int             @default(0) @map("triggered_count")
+  lastTriggeredAt DateTime?       @map("last_triggered_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  user            Profile         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_alerts")
+}
+
+// ─── Signal Bookmarks ─────────────────────────────────────────────────────────
+
+model SignalBookmark {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  signalId      String    @map("signal_id")
+  notes         String?
+  bookmarkedAt  DateTime  @default(now()) @map("bookmarked_at")
+
+  user          Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signal        Signal    @relation(fields: [signalId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, signalId])
+  @@index([userId])
+  @@map("signal_bookmarks")
+}
+
+// ─── Scan History ─────────────────────────────────────────────────────────────
+
+model ScanHistory {
+  id                    String    @id @default(uuid()) @db.Uuid
+  chain                 ChainId
+  signalsGenerated      Int       @default(0) @map("signals_generated")
+  highConvictionCount   Int       @default(0) @map("high_conviction_count")
+  durationMs            Int       @default(0) @map("duration_ms")
+  triggeredBy           String    @default("cron") @map("triggered_by")
+  errors                String[]  @default([])
+  scannedAt             DateTime  @default(now()) @map("scanned_at")
+
+  @@index([chain])
+  @@index([scannedAt(sort: Desc)])
+  @@map("scan_history")
+}
