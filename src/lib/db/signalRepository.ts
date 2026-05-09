@@ -21,6 +21,8 @@ export interface CachedSignal {
   title: string;
   catalystSummary: string;
   invalidationCriteria: string;
+  tradingVehicle?: string;        // e.g. 'BTCUSDT.P (Futures) 5x' or 'BTC — Spot'
+  fundingRateWarning?: string;    // Funding rate caution for perp longs/shorts
   riskRating: 'LOW' | 'MEDIUM' | 'HIGH';
   timeHorizon: string;
   keyTags: string[];

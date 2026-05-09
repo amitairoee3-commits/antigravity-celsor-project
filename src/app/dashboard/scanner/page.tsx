@@ -168,19 +168,62 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        {/* Loading state */}
+        {/* Loading state - 5-step neural animation */}
         {loading && (
-          <div className="flex flex-col items-center gap-6 py-16">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full border-2 border-orange-500/20 flex items-center justify-center">
-                <Brain className="w-7 h-7 text-orange-500" />
+          <div className="mt-8 bg-[#050505] border border-orange-500/20 rounded-2xl p-8 backdrop-blur-xl overflow-hidden relative max-w-2xl mx-auto">
+            {/* Animated background pulse */}
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-transparent" />
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/5 to-transparent"
+              animate={{ x: ['-100%', '200%'] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}
+            />
+
+            <div className="relative space-y-6">
+              {/* Header */}
+              <div className="flex items-center gap-4 mb-8">
+                <div className="relative">
+                  <div className="w-10 h-10 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
+                  <div className="absolute inset-1 w-8 h-8 border border-orange-500/30 border-b-orange-400 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }} />
+                </div>
+                <div>
+                  <div className="text-base font-bold text-white">Celsor Wallet Intelligence</div>
+                  <div className="text-xs text-orange-400/70 font-mono uppercase tracking-widest">Scanning {address.slice(0, 8)}...{address.slice(-6)}</div>
+                </div>
               </div>
-              <div className="absolute inset-0 rounded-full border-2 border-orange-500/60 border-t-transparent animate-spin" />
-              <div className="absolute inset-0 blur-2xl bg-orange-500/10 rounded-full" />
-            </div>
-            <div className="text-center">
-              <p className="text-white font-medium mb-1">Running AI Analysis</p>
-              <p className="text-sm text-gray-500">Fetching on-chain data → Classifying wallet → Generating narrative...</p>
+
+              {/* Step-by-step progress */}
+              {[
+                { step: 'On-Chain Extraction', detail: 'Etherscan/RPC transaction ingestion', delay: 0 },
+                { step: 'Cluster Matching', detail: 'Cross-referencing global wallet archetypes', delay: 0.7 },
+                { step: 'P&L Analysis', detail: 'Calculating historical win rate & Alpha Score', delay: 1.4 },
+                { step: 'Behavioral RAG', detail: 'Fetching similar wallet patterns via pgvector', delay: 2.1 },
+                { step: 'Narrative Generation', detail: 'GPT-4o synthesizing intent & conviction', delay: 2.8 },
+              ].map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: item.delay, duration: 0.5 }}
+                  className="flex items-start gap-4"
+                >
+                  <div className="relative mt-1">
+                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
+                    {i !== 4 && (
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: '2rem' }}
+                        transition={{ delay: item.delay + 0.3, duration: 0.4 }}
+                        className="absolute top-2 left-[3px] w-px bg-orange-500/30"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white font-mono">{item.step}</div>
+                    <div className="text-[10px] text-gray-500">{item.detail}</div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         )}
